@@ -1,9 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-import seaborn as sns
-import matplotlib
-matplotlib.use('Qt5Agg')  
+from sklearn.model_selection import train_test_split  
 import matplotlib.pyplot as plt
 
 grupo_demografico = ['Age at enrollment', 'Gender', 'Nacionality', 'Marital status']
@@ -67,6 +64,16 @@ def construir_atributos(df):
     #"""Cria os atributos derivados. Tratar divisao por zero."""
     
     dfA = df.copy()
+
+    colunas_desempenho = [
+        'Curricular units 1st sem (enrolled)',
+        'Curricular units 1st sem (approved)',
+        'Curricular units 2nd sem (enrolled)',
+        'Curricular units 2nd sem (approved)',
+    ]
+
+    if not all(c in dfA.columns for c in colunas_desempenho):
+        return dfA
     
     Enrolled1st = dfA['Curricular units 1st sem (enrolled)']
     Approved1st = dfA['Curricular units 1st sem (approved)']
@@ -90,22 +97,10 @@ def construir_atributos(df):
 
     return dfA  
 
-
+    
 
 def codificar(X, mapa_de_tipos):
     #"""One-hot para nominais, ordinal para ordinais, passthrough contínuos."""
-
-    """https://www.youtube.com/@thiagovariavel4502
-    pode tirar maritinal status
-    """
-    """"
-    Dados nominais: aplicattion mode, course previous quilification, mother qualification, father qualification
-    mother occupation, father occupation, Nacionality
-    Passthrough: Displaced, Educational speacial needs, debtor, tuition fees up to date, gender, scholar holder, internacional
-    ,daytime
-    Continuos: Age at enrollment, Admission grade, application order
-    , Previous qualification (grade), Unemployment rate, Inflation rate, GDP
-    """
 
     X = X.copy()
 
@@ -117,7 +112,7 @@ def codificar(X, mapa_de_tipos):
             continue
 
         if tipo == 'nominal':
-            dummies = pd.get_dummies(X[coluna], prefix=coluna, drop_first=False)
+            dummies = pd.get_dummies(X[coluna], prefix=coluna, drop_first=False).astype(int)
             X = X.drop(columns=[coluna])
             X = pd.concat([X, dummies], axis=1)
 
@@ -133,61 +128,104 @@ def codificar(X, mapa_de_tipos):
         
 
 
-
-
-
-
 def normalizar(X_treino, X_teste, metodo):
 #"""Ajusta o escalonador SO no treino e aplica nos dois conjuntos."""
  
     if metodo == 'zscore':
-        scaler = StandardScaler()
+        media = X_treino.mean(axis=0)
+        desvio = X_treino.std(axis=0)
+        desvio = desvio.replace(0, 1)
+
+        X_treinoScalado = (X_treino - media)/(desvio)
+        X_testeScalado = (X_teste - media)/ (desvio)
+
     elif metodo == 'minmax':
-        scaler = MinMaxScaler()
+        minimo = X_treino.min(axis=0)
+        maximo = X_treino.max(axis = 0)
+        faixa = np.where(maximo - minimo == 0, 1, maximo - minimo)
+
+        X_treinoScalado = (X_treino - minimo)/(faixa)
+        X_testeScalado = (X_teste - minimo)/(faixa)
     else:
         raise ValueError("Metodo incorreto")
-        
 
-    scaler.fit(X_treino)
     
-    
-
     X_treinoScalado = pd.DataFrame(
-        scaler.transform(X_treino),
+        X_treinoScalado,
         columns=X_treino.columns,
         index=X_treino.index
     )
     X_testeScalado = pd.DataFrame(
-        scaler.transform(X_teste),
+        X_testeScalado,
         columns=X_teste.columns,
         index=X_teste.index
     )
 
     return X_treinoScalado, X_testeScalado
 
+def limpar_dados(X, Y):
+    X = X.copy()
+    Y = Y.copy()
 
-def remover_colunas(X, colunas_a_remover):
-    """Remove colunas indesejadas do conjunto de atributos.
+    duplicata = X.duplicated()
+    n_duplicatas = duplicata.sum()
 
-    colunas_a_remover: lista de nomes de coluna a excluir de X.
-    """
-    return X.drop(columns=colunas_a_remover, errors='ignore')
+    if n_duplicatas > 0:
+        X = X[~duplicata]
+        Y = Y[~duplicata]
+
+    return X, Y
+
+def tratar_outliers_iqr(X_treino, X_teste, colunas):
+    """Calcula os limites de outliers (metodo IQR) SO no treino e aplica (cap) nos dois conjuntos."""
+
+    X_treino = X_treino.copy()
+    X_teste = X_teste.copy()
+
+    for col in colunas:
+        if col not in X_treino.columns:
+            continue
+
+        Q1 = X_treino[col].quantile(0.25)
+        Q3 = X_treino[col].quantile(0.75)
+        IQR = Q3 - Q1
+
+        limite_inferior = Q1 - 1.5 * IQR
+        limite_superior = Q3 + 1.5 * IQR
+
+        X_treino[col] = X_treino[col].clip(lower=limite_inferior, upper=limite_superior)
+        X_teste[col] = X_teste[col].clip(lower=limite_inferior, upper=limite_superior)
+
+    return X_treino, X_teste
+
 
 
 if __name__ == "__main__":
 
     X, Y = carregar_dados('/home/thiago/Downloads/PP01/dataset/data.csv', "A")
-    X.head()
 
-    X.info()
-    print(X.isnull().sum())
-    print(X.describe())
+    X, Y = limpar_dados(X, Y)
+    
+    X = construir_atributos(X)
+    X = codificar(X, mapa_de_tipos)
 
-    print(X.boxplot())
+    X_treino, X_teste, Y_treino, Y_teste = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-    fig, axs = plt.subplots(len(X.columns), 1, figsize=(7, 18), dpi=95)
-    for i, col in enumerate(X.columns):
-        axs[i].boxplot(X[col], vert=False)
+    colunas_continuas = [c for c, tipo in mapa_de_tipos.items() if tipo == 'continuos' and c in X.columns]
+
+    X_treino, X_teste = tratar_outliers_iqr(X_treino, X_teste, colunas_continuas)
+
+    X_treinoScalado, Y_testeScalado = normalizar(X_treino, X_teste, "minmax")
+
+    #referente a parte de exibição dos graficos
+
+    fig, axs = plt.subplots(len(colunas_continuas), 1, figsize=(7, 3 * len(colunas_continuas)), dpi=95)
+    if len(colunas_continuas) == 1:
+        axs = [axs]  # 
+
+    for i, col in enumerate(colunas_continuas):
+        axs[i].boxplot(X_treino[col], vert=False)
         axs[i].set_ylabel(col)
+
     plt.tight_layout()
     plt.show()
