@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split  
@@ -13,13 +14,14 @@ grupo_desempenho_2sem = ['Curricular units 2nd sem (credited)', 'Curricular unit
 COLUNA_ALVO = 'Target'
 
 mapa_de_tipos = {
+    'Marital status': 'nominal',
     'Application mode': 'nominal',
-    'Application order': 'continuos',
+    'Application order': 'ordinal', ####
     'Course': 'nominal',
     'Daytime/evening attendance\t': 'binary',
     'Previous qualification': 'nominal',
     'Previous qualification (grade)': 'continuos',
-    'Nacionality': 'nominal',
+    'Nacionality': 'binary', ####
     "Mother's qualification": 'nominal',
     "Father's qualification": 'nominal',
     "Mother's occupation": 'nominal',
@@ -37,7 +39,7 @@ mapa_de_tipos = {
 }
 
 # --- Dados e pre-processamento ------------------------------------------
-def carregar_dados(caminho, cenario):
+def carregar_dados(caminho, cenario): ### olhar dps
 
     df=pd.read_csv(caminho, sep=';')
 
@@ -50,11 +52,16 @@ def carregar_dados(caminho, cenario):
     elif(cenario == "C"):
         colunas = grupo_desempenho_1sem + grupo_demografico + grupo_socioeconomico + grupo_ingresso + grupo_macroeconomico + grupo_desempenho_2sem
 
+
     x = df[colunas].copy()
     y = df[COLUNA_ALVO].copy()
 
-    return x, y
+    print(f"\n[carregar_dados] cenario {cenario}: CSV com {df.shape[0]} linhas e {df.shape[1]} colunas")
+    print(f"[carregar_dados] X ficou com {x.shape[1]} colunas | valores nulos em X: {x.isnull().sum().sum()}")
+    print(f"[carregar_dados] distribuicao do alvo: {y.value_counts().to_dict()}")
     
+
+    return x, y
 #"""Le o CSV e devolve X, y filtrados pelo cenario (’A’, ’B’ ou ’C’)."""
 
 
@@ -65,35 +72,33 @@ def construir_atributos(df):
     
     dfA = df.copy()
 
-    colunas_desempenho = [
-        'Curricular units 1st sem (enrolled)',
-        'Curricular units 1st sem (approved)',
-        'Curricular units 2nd sem (enrolled)',
-        'Curricular units 2nd sem (approved)',
-    ]
+    def taxa(aprovadas, matriculadas): #### ver isso aqui
+        return np.where(matriculadas == 0, 0, aprovadas / matriculadas.replace(0, 1))
 
-    if not all(c in dfA.columns for c in colunas_desempenho):
-        return dfA
+    tem_1sem = all(c in dfA.columns for c in ['Curricular units 1st sem (enrolled)', 'Curricular units 1st sem (approved)'])
+    tem_2sem = all(c in dfA.columns for c in ['Curricular units 2nd sem (enrolled)', 'Curricular units 2nd sem (approved)'])
     
-    Enrolled1st = dfA['Curricular units 1st sem (enrolled)']
-    Approved1st = dfA['Curricular units 1st sem (approved)']
-    Enrolled2st = dfA['Curricular units 2nd sem (enrolled)']
-    Approved2st = dfA['Curricular units 2nd sem (approved)']
-
-    dfA['Curricular units 1st sem (aproved) treated'] = np.where(
-        Enrolled1st == 0, 0, Approved1st / Enrolled1st
-    )
-
-    dfA['Curricular units 2nd sem (aproved) treated'] = np.where(
-            Enrolled2st == 0, 0, Approved2st / Enrolled2st
-        )
-
-    TotalEnroled = Enrolled2st + Enrolled1st
-    TotalApproved = Approved1st + Approved2st
-
-    dfA['Curricular units total (aproved) treated'] = np.where(
-        TotalEnroled == 0, 0, TotalApproved / TotalEnroled
-        )
+    # cenario B tem so o 1o semestre, cenario C tem os dois: cada taxa e criada se as colunas dela existirem
+    if tem_1sem:
+            Enrolled1st = dfA['Curricular units 1st sem (enrolled)']
+            Approved1st = dfA['Curricular units 1st sem (approved)']
+            dfA['Curricular units 1st sem (aproved) treated'] = taxa(Approved1st, Enrolled1st)
+    
+    if tem_2sem:
+            Enrolled2st = dfA['Curricular units 2nd sem (enrolled)']
+            Approved2st = dfA['Curricular units 2nd sem (approved)']
+            dfA['Curricular units 2nd sem (aproved) treated'] = taxa(Approved2st, Enrolled2st)
+    
+    if tem_1sem and tem_2sem:
+            TotalEnroled = Enrolled2st + Enrolled1st
+            TotalApproved = Approved1st + Approved2st
+            dfA['Curricular units total (aproved) treated'] = taxa(TotalApproved, TotalEnroled)
+    
+    novas = [c for c in dfA.columns if c not in df.columns]
+    print(f"\n[construir_atributos] {len(novas)} atributo(s) criado(s): {novas if novas else 'nenhum (cenario sem dados de semestre)'}")
+    for c in novas:
+        print(f"[construir_atributos]   {c}: min={dfA[c].min():.2f} max={dfA[c].max():.2f} media={dfA[c].mean():.2f}")
+    
 
     return dfA  
 
@@ -103,6 +108,7 @@ def codificar(X, mapa_de_tipos):
     #"""One-hot para nominais, ordinal para ordinais, passthrough contínuos."""
 
     X = X.copy()
+    n_colunas_antes = X.shape[1]
 
     if 'Nacionality' in X.columns:
         X['Nacionality'] = np.where(X['Nacionality'] == 1, X['Nacionality'], 2) 
@@ -120,9 +126,12 @@ def codificar(X, mapa_de_tipos):
             mapa_ordinal = {categoria: i for i, categoria in enumerate(tipo)}
             X[coluna] = X[coluna].map(mapa_ordinal)
 
-        elif tipo in ('continuos', 'binary'):
+        elif tipo in ('continuos', 'binary', 'ordinal'):
             pass
 
+    print(f"\n[codificar] colunas antes: {n_colunas_antes} | depois do one-hot: {X.shape[1]}")
+    if 'Nacionality' in X.columns:
+        print(f"[codificar] Nacionality agrupada em: {X['Nacionality'].value_counts().to_dict()} (1 = portuguesa, 2 = outras)")
     return X
 
         
@@ -161,6 +170,10 @@ def normalizar(X_treino, X_teste, metodo):
         index=X_teste.index
     )
 
+    print(f"\n[normalizar] metodo: {metodo}")
+    print(f"[normalizar] treino: min={X_treinoScalado.min().min():.2f} max={X_treinoScalado.max().max():.2f} media={X_treinoScalado.values.mean():.2f}")
+    print(f"[normalizar] teste:  min={X_testeScalado.min().min():.2f} max={X_testeScalado.max().max():.2f} media={X_testeScalado.values.mean():.2f}")
+
     return X_treinoScalado, X_testeScalado
 
 def limpar_dados(X, Y):
@@ -173,6 +186,8 @@ def limpar_dados(X, Y):
     if n_duplicatas > 0:
         X = X[~duplicata]
         Y = Y[~duplicata]
+
+    print(f"\n[limpar_dados] duplicatas encontradas e removidas: {n_duplicatas} | linhas restantes: {len(X)}")
 
     return X, Y
 
@@ -193,6 +208,10 @@ def tratar_outliers_iqr(X_treino, X_teste, colunas):
         limite_inferior = Q1 - 1.5 * IQR
         limite_superior = Q3 + 1.5 * IQR
 
+        cortados_treino = ((X_treino[col] < limite_inferior) | (X_treino[col] > limite_superior)).sum()
+        cortados_teste = ((X_teste[col] < limite_inferior) | (X_teste[col] > limite_superior)).sum()
+        print(f"[tratar_outliers_iqr]   {col}: [{limite_inferior:.1f}, {limite_superior:.1f}] | ajustados: treino={cortados_treino} teste={cortados_teste}")
+
         X_treino[col] = X_treino[col].clip(lower=limite_inferior, upper=limite_superior)
         X_teste[col] = X_teste[col].clip(lower=limite_inferior, upper=limite_superior)
 
@@ -202,7 +221,8 @@ def tratar_outliers_iqr(X_treino, X_teste, colunas):
 
 if __name__ == "__main__":
 
-    X, Y = carregar_dados('/home/thiago/Downloads/PP01/dataset/data.csv', "A")
+    caminho_csv = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.csv')
+    X, Y = carregar_dados(caminho_csv, "A")
 
     X, Y = limpar_dados(X, Y)
     
@@ -211,11 +231,15 @@ if __name__ == "__main__":
 
     X_treino, X_teste, Y_treino, Y_teste = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-    colunas_continuas = [c for c, tipo in mapa_de_tipos.items() if tipo == 'continuos' and c in X.columns]
+    print(f"\n[train_test_split] treino: {X_treino.shape[0]} linhas | teste: {X_teste.shape[0]} linhas")
+    print(f"[train_test_split] proporcao do alvo no treino: {Y_treino.value_counts(normalize=True).round(3).to_dict()}")
+    print(f"[train_test_split] proporcao do alvo no teste:  {Y_teste.value_counts(normalize=True).round(3).to_dict()}")
 
+    colunas_continuas = [c for c, tipo in mapa_de_tipos.items() if tipo == 'continuos' and c in X.columns]
+    
     X_treino, X_teste = tratar_outliers_iqr(X_treino, X_teste, colunas_continuas)
 
-    X_treinoScalado, Y_testeScalado = normalizar(X_treino, X_teste, "minmax")
+    X_treinoScalado, X_testeScalado = normalizar(X_treino, X_teste, "minmax")
 
     #referente a parte de exibição dos graficos
 
