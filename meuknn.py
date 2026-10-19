@@ -229,7 +229,7 @@ def selecionar_melhor_knn_cv(X_treino_df, y_treino, n_folds=5, semente=SEMENTE):
     print("\n[Seleção de k e distância por validação cruzada]")
 
     y_treino = np.asarray(y_treino, dtype=int)
-    valores_k = [3, 5, 7, 9, 11, 15, 21, 31, 41, 51]
+    valores_k = list(range(1, 52, 2))
     metricas = ["euclidiana", "manhattan", "chebyshev", "cosseno"]
     k_max = max(valores_k)
 
@@ -579,7 +579,7 @@ def executar_pipeline_completo(cenario="A"):
     X_tr_arr, X_val_arr = preparar_referencia_e_alvo(X_tr_df, X_val_df, "minmax")
     _, X_te_arr_tr = preparar_referencia_e_alvo(X_tr_df, X_te_df, "minmax")
 
-    # Experimentos (cada um faz seu próprio pré-processamento por fold).
+    # Experimentos (cada um faz seu próprio pré-processamento por fold)
     experimento_e1_normalizacao(X_tr_df, y_tr, cenario=cenario)
     experimento_maldicao_dimensionalidade(X_tr_df, y_tr, cenario=cenario)
 
