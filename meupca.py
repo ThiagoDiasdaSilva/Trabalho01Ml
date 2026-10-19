@@ -96,17 +96,17 @@ def pca_ajustar(X_treino, n_componentes=None):
     """
     X_treino = np.array(X_treino, dtype=float)
 
-    # 1. Centralizacao subtraindo a media de cada atributo
+    # Centralizacao subtraindo a media de cada atributo
     media = np.mean(X_treino, axis=0)
     X_cent = X_treino - media
 
-    # 2. Matriz de covariancia amostral (ddof=1)
+    # Matriz de covariancia amostral
     cov = np.cov(X_cent, rowvar=False)
 
-    # 3. Autovalores e autovetores via decomposicao espectral hermitiana
+    # Autovalores e autovetores via decomposicao espectral hermitiana
     autovalores, autovetores = np.linalg.eigh(cov)
 
-    # 4. Ordenacao decrescente
+    # Ordenacao decrescente
     idx = np.argsort(autovalores)[::-1]
     autovalores = autovalores[idx]
     autovetores = autovetores[:, idx]
@@ -126,7 +126,7 @@ def pca_ajustar(X_treino, n_componentes=None):
         if W[max_abs_idx, i] < 0:
             W[:, i] = -W[:, i]
 
-    # Variancia explicada relativa (individual)
+    # Variancia explicada individual
     variancia_total = np.sum(autovalores)
     if variancia_total == 0:
         variancia_explicada = np.zeros(n_componentes)
@@ -162,20 +162,24 @@ def validar_contra_sklearn(X_treino, n_componentes=5):
     """
     Valida a implementacao autoral de PCA contra o PCA do scikit-learn (Seção 4.2.b.1).
     """
-    print("\n" + "="*70)
-    print(f" [VALIDAÇÃO PCA AUTORAL vs SCIKIT-LEARN] (n_componentes = {n_componentes})")
-    print("="*70)
+    print()
+    print(f"[VALIDAÇÃO PCA AUTORAL vs SCIKIT-LEARN (n_componentes = {n_componentes})]")
+    print()
 
-    # 1. PCA Autoral
+    # PCA Autoral
     media, W, var_exp_autoral = pca_ajustar(X_treino, n_componentes=n_componentes)
     Z_autoral = pca_projetar(X_treino, media, W)
 
-    # 2. PCA do Scikit-Learn
+    # PCA do Scikit-Learn
     pca_sk = SklearnPCA(n_components=n_componentes)
     Z_sk = pca_sk.fit_transform(X_treino)
     var_exp_sk = pca_sk.explained_variance_ratio_
 
     diff_var = np.max(np.abs(var_exp_autoral - var_exp_sk))
+
+    for j in range(min(Z_autoral.shape[1], Z_sk.shape[1])):
+        if np.dot(Z_autoral[:, j], Z_sk[:, j]) < 0:
+            Z_sk[:, j] *= -1
     diff_Z = np.max(np.abs(Z_autoral - Z_sk))
 
     print(f"Diferença máxima na Variância Explicada: {diff_var:.2e}")
@@ -201,10 +205,10 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
     os.makedirs(pasta_tabelas, exist_ok=True)
 
     print("\n" + "="*70)
-    print(f" GERANDO ANÁLISES E GRÁFICOS DO PCA | Cenário {cenario}")
+    print(f" [GERANDO ANÁLISES E GRÁFICOS DO PCA | Cenário {cenario}]")
     print("="*70)
 
-    # 1. Carregamento e Preparacao dos Dados
+    # Carregamento e Preparacao dos Dados
     caminho_csv = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.csv')
     X_raw, y = carregar_dados(caminho_csv, cenario)
     X_clean, y = limpar_dados(X_raw, y)
@@ -212,7 +216,7 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
     X_cod = codificar(X_feat, mapa_de_tipos)
     nomes_atributos = list(X_cod.columns)
 
-    # 2. PCA com Padronizacao Z-Score (Padrao recomendado)
+    # PCA com Padronizacao Z-Score 
     X_padronizado = normalizar(X_cod, metodo='padronizacao')
     media_pad, W_pad, var_exp_pad = pca_ajustar(X_padronizado, n_componentes=X_padronizado.shape[1])
     Z_pad = pca_projetar(X_padronizado, media_pad, W_pad)
@@ -227,7 +231,7 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
 
     print(f"\nVariância explicada PC1: {var_exp_pad[0]*100:.2f}% | PC2: {var_exp_pad[1]*100:.2f}% | PC3: {var_exp_pad[2]*100:.2f}%")
     print(f"Variância acumulada PC1 + PC2: {var_acum_pad[1]*100:.2f}%")
-    print(f"Componentes necessárias para 90% da variância: d = {d_90}")
+    print(f"\nComponentes necessárias para 90% da variância: d = {d_90}")
     print(f"Componentes necessárias para 95% da variância: d = {d_95}")
 
     # Salva variancia explicada em CSV
@@ -238,11 +242,8 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
     })
     caminho_csv_var = os.path.join(pasta_tabelas, f"pca_variancia_cenario_{cenario}.csv")
     df_var.to_csv(caminho_csv_var, index=False)
-    print(f"[Tabela] Variância salva em: {caminho_csv_var}")
 
-    # -------------------------------------------------------------------------
-    # FIGURA 1: Scree Plot (Variancia Explicada Individual e Acumulada)
-    # -------------------------------------------------------------------------
+    # Gráfico 1: Variancia Explicada Individual e Acumulada)
     fig, ax1 = plt.subplots(figsize=(10, 5.5), dpi=300)
 
     # Mostra ate as primeiras 50 componentes para visualizacao clara do cotovelo
@@ -277,17 +278,14 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
                  fontsize=10, fontweight='bold', color='#2B9348')
 
     plt.title(f"Scree Plot - Variância Explicada por Componente Principal (Cenário {cenario})\n"
-              f"Critério de Seleção de Dimensão d (Seção 4.2.b.3 do PDF)", fontsize=13, fontweight='bold', pad=15)
+              f"Critério de Seleção de Dimensão d", fontsize=13, fontweight='bold', pad=15)
 
     fig.tight_layout()
     caminho_fig1 = os.path.join(pasta_figuras, f"pca_scree_plot_cenario_{cenario}.png")
     plt.savefig(caminho_fig1, bbox_inches='tight')
     plt.close(fig)
-    print(f"[Figura] Scree Plot salvo em: {caminho_fig1}")
 
-    # -------------------------------------------------------------------------
-    # FIGURA 2: Projecao 2D (PC1 x PC2) colorida pelas classes
-    # -------------------------------------------------------------------------
+    # Gráfico 2: Projecao 2D (PC1 x PC2)
     paleta_classes = {
         'Dropout': '#E63946',   # Vermelho
         'Enrolled': '#F4A261',  # Âmbar / Laranja
@@ -302,7 +300,7 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
                    label=classe, color=cor, alpha=0.6, edgecolors='none', s=24)
 
     ax.set_title(f"Projeção 2D do PCA (PC1 vs PC2) - Cenário {cenario}\n"
-                 f"Separação das Classes e Sobreposição de 'Enrolled' (Seção 4.2.b.4)",
+                 f"Separação das Classes e Sobreposição de 'Enrolled' ",
                  fontsize=13, fontweight='bold', pad=15)
     ax.set_xlabel(f"PC1 ({var_exp_pad[0]*100:.2f}% da variância explicada)", fontsize=11, fontweight='bold')
     ax.set_ylabel(f"PC2 ({var_exp_pad[1]*100:.2f}% da variância explicada)", fontsize=11, fontweight='bold')
@@ -311,7 +309,7 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
 
     # Anotacao explicativa no grafico sobre a sobreposicao de Enrolled
     ax.text(0.03, 0.04,
-            "Observação (Seção 4.2.b.4):\n"
+            "Observação:\n"
             "• Dropout e Graduate apresentam relativa separação ao longo do espaço projetado.\n"
             "• A classe Enrolled (matrícula ativa) situa-se como um estado intermediário\n"
             "  fortemente sobreposto entre ambas as classes terminais.",
@@ -322,18 +320,15 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
     caminho_fig2 = os.path.join(pasta_figuras, f"pca_projecao_2d_cenario_{cenario}.png")
     plt.savefig(caminho_fig2, bbox_inches='tight')
     plt.close(fig)
-    print(f"[Figura] Projeção 2D salva em: {caminho_fig2}")
 
-    # -------------------------------------------------------------------------
-    # FIGURA 3: Comparativo COM vs. SEM Padronizacao Previa (Seção 4.2.b.2)
-    # -------------------------------------------------------------------------
+    # Gráfico 3: COM vs. SEM Padronizacao
     X_sem_pad = np.array(X_cod, dtype=float)
     media_sem, W_sem, var_exp_sem = pca_ajustar(X_sem_pad, n_componentes=2)
     Z_sem = pca_projetar(X_sem_pad, media_sem, W_sem)
 
     fig, (ax_sem, ax_com) = plt.subplots(1, 2, figsize=(16, 6.5), dpi=300)
 
-    # Subplot 1: Sem Padronizacao
+    # Sem Padronizacao
     for classe, cor in paleta_classes.items():
         mascara = (y == classe)
         ax_sem.scatter(Z_sem[mascara, 0], Z_sem[mascara, 1],
@@ -346,12 +341,12 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
     ax_sem.grid(True, linestyle='--', alpha=0.3)
     ax_sem.legend(frameon=True, loc='upper right')
 
-    # Subplot 2: Com Padronizacao Z-score
+    # Com Padronizacao Z-score
     for classe, cor in paleta_classes.items():
         mascara = (y == classe)
         ax_com.scatter(Z_pad[mascara, 0], Z_pad[mascara, 1],
                        label=classe, color=cor, alpha=0.55, edgecolors='none', s=20)
-    ax_com.set_title(f"(B) COM Padronização (Z-Score)\n"
+    ax_com.set_title(f"COM Padronização (Z-Score)\n"
                      f"PC1 ({var_exp_pad[0]*100:.1f}%) e PC2 ({var_exp_pad[1]*100:.1f}%)\n"
                      f"Todas as variáveis contribuem na mesma escala", fontsize=11, fontweight='bold')
     ax_com.set_xlabel(f"PC1 ({var_exp_pad[0]*100:.1f}% da variância)", fontsize=10, fontweight='bold')
@@ -359,28 +354,25 @@ def gerar_graficos_pca(cenario="A", pasta_figuras="figuras", pasta_tabelas="tabe
     ax_com.grid(True, linestyle='--', alpha=0.3)
     ax_com.legend(frameon=True, loc='upper right')
 
-    fig.suptitle(f"Efeito Crítico da Padronização Prévia no PCA (Requisito Seção 4.2.b.2 do PDF)",
+    fig.suptitle(f"Efeito Crítico da Padronização Prévia no PCA {cenario}",
                  fontsize=14, fontweight='bold', y=1.02)
     fig.tight_layout()
     caminho_fig3 = os.path.join(pasta_figuras, f"pca_com_vs_sem_padronizacao_cenario_{cenario}.png")
     plt.savefig(caminho_fig3, bbox_inches='tight')
     plt.close(fig)
-    print(f"[Figura] Comparação de padronização salva em: {caminho_fig3}")
 
-    # -------------------------------------------------------------------------
-    # TABELA DE CARGAS (LOADINGS) - Seção 6 Experimento E2
-    # -------------------------------------------------------------------------
+   
+    # TABELA DE CARGAS (LOADINGS)
     df_cargas = cargas_componentes(W_pad, nomes_atributos, n=3)
     caminho_csv_cargas = os.path.join(pasta_tabelas, f"pca_cargas_loadings_cenario_{cenario}.csv")
     df_cargas.to_csv(caminho_csv_cargas)
-    print(f"[Tabela] Cargas das 3 primeiras componentes salvas em: {caminho_csv_cargas}")
 
-    print("\n--- Top 5 Atributos com Maiores Cargas Absolutas em PC1 ---")
+    print("\n[Top 5 Atributos com Maiores Cargas Absolutas em PC1]")
     pc1_top = df_cargas['PC1'].abs().sort_values(ascending=False).head(5)
     for attr in pc1_top.index:
         print(f"  {attr:45s} -> Carga: {df_cargas.loc[attr, 'PC1']:+.4f}")
 
-    print("\n--- Top 5 Atributos com Maiores Cargas Absolutas em PC2 ---")
+    print("\n[Top 5 Atributos com Maiores Cargas Absolutas em PC2]")
     pc2_top = df_cargas['PC2'].abs().sort_values(ascending=False).head(5)
     for attr in pc2_top.index:
         print(f"  {attr:45s} -> Carga: {df_cargas.loc[attr, 'PC2']:+.4f}")

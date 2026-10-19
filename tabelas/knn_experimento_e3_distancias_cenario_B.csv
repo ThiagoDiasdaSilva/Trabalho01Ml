@@ -1,0 +1,5 @@
+Métrica,k_Ótimo,Acurácia (%),F1_Macro
+Euclidiana,7,63.28%,0.5286
+Manhattan,7,63.28%,0.5389
+Chebyshev,5,48.45%,0.2383
+Cosseno,5,60.59%,0.5113
