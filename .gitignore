@@ -2,6 +2,5 @@ __pycache__/
 *.py[cod]
 *$py.class
 data.csv
-figuras/
 *.log
 .env

@@ -1,6 +1,8 @@
 """
+minhaarvore.py - Unidade 3 (Árvores de Decisão) - PP01 RUS0310
+
 Como rodar:
-  python minhaarvore.py        -> roda só os testes (não precisa do data.csv)
+  python minhaarvore.py        -> roda só os testes (não precisa do data.csv; gera figuras/arvore_exemplo_8_alunos.png)
   python minhaarvore.py A      -> roda os experimentos da árvore no cenário A
   python minhaarvore.py A B C  -> roda nos três cenários
 """
@@ -9,12 +11,13 @@ import os
 import sys
 import time
 import copy
+import textwrap
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 SEMENTE = 42
-ROTULOS = ["Dropout", "Enrolled", "Graduate"] 
+ROTULOS = ["Dropout", "Enrolled", "Graduate"]   # mesma ordem do MAPA_ALVO do meuknn.py
 PASTA_FIGURAS = "figuras"
 PASTA_TABELAS = "tabelas"
 
@@ -200,6 +203,88 @@ def importancia_atributos(raiz, n_atributos):
     return imp / imp.sum() if imp.sum() > 0 else imp
 
 
+# 4b. Desenho da árvore
+def plotar_arvore(raiz, nomes_atributos, nomes_classes, caminho, prof_exibida=3, titulo=None):
+    """Desenha a árvore (só os primeiros 'prof_exibida' níveis) e salva em 'caminho'.
+    Cada caixa mostra a pergunta (nós internos), quantos alunos chegaram ali (n),
+    quantos são de cada classe e a classe prevista. Cor = classe prevista.
+    Caixas tracejadas são nós que continuam, mas não foram desenhados."""
+    cores = ["#F4A6A6", "#F6D98B", "#9ED9A5", "#A9C7F0", "#D5B8F0"]
+
+    # 1) posições: folhas (ou nós cortados) ocupam colunas seguidas; o pai fica no meio dos filhos
+    posicoes = {}
+    contador = [0]
+
+    def posicionar(no, prof):
+        if no.eh_folha() or prof >= prof_exibida:
+            x = contador[0]
+            contador[0] += 1
+        else:
+            x = (posicionar(no.esq, prof + 1) + posicionar(no.dir, prof + 1)) / 2
+        posicoes[id(no)] = (x, -prof)
+        return x
+
+    posicionar(raiz, 0)
+    n_colunas = contador[0]
+    n_niveis = min(profundidade(raiz), prof_exibida)
+
+    fig, ax = plt.subplots(figsize=(max(7, 2.7 * n_colunas), 2.1 * (n_niveis + 1) + 1.0), dpi=200)
+
+    # 2) ligações (desenhadas primeiro, ficam atrás das caixas)
+    def ligar(no, prof):
+        if no.eh_folha() or prof >= prof_exibida:
+            return
+        x, y = posicoes[id(no)]
+        for filho, rotulo in ((no.esq, "sim"), (no.dir, "não")):
+            xf, yf = posicoes[id(filho)]
+            ax.plot([x, xf], [y, yf], color="gray", lw=1.2, zorder=1)
+            ax.text((x + xf) / 2, (y + yf) / 2 + 0.05, rotulo, fontsize=8, color="dimgray",
+                    ha="center", va="bottom", zorder=2)
+            ligar(filho, prof + 1)
+
+    ligar(raiz, 0)
+
+    # 3) caixas
+    def desenhar(no, prof):
+        x, y = posicoes[id(no)]
+        n = int(no.contagens.sum())
+        contagens = " / ".join(str(int(c)) for c in no.contagens[:len(nomes_classes)])
+        classe = nomes_classes[no.classe]
+        cortado = (not no.eh_folha()) and prof >= prof_exibida
+        if no.eh_folha() or cortado:
+            texto = f"{classe}\nn = {n}\n[{contagens}]"
+            if cortado:
+                texto += "\n(continua...)"
+        else:
+            pergunta = f"{nomes_atributos[no.atributo]} <= {no.limiar:.3g}?"
+            texto = textwrap.fill(pergunta, width=24) + f"\nn = {n}\n[{contagens}]\n→ {classe}"
+        ax.text(x, y, texto, ha="center", va="center", fontsize=8, zorder=3,
+                bbox=dict(boxstyle="round,pad=0.4", facecolor=cores[no.classe % len(cores)],
+                          edgecolor="black", linestyle="--" if cortado else "-", linewidth=1.1))
+        if not no.eh_folha() and prof < prof_exibida:
+            desenhar(no.esq, prof + 1)
+            desenhar(no.dir, prof + 1)
+
+    desenhar(raiz, 0)
+
+    legenda = [plt.Rectangle((0, 0), 1, 1, facecolor=cores[i % len(cores)], edgecolor="black")
+               for i in range(len(nomes_classes))]
+    ax.legend(legenda, nomes_classes, loc="lower center", ncol=len(nomes_classes),
+              bbox_to_anchor=(0.5, -0.02), frameon=False, fontsize=9)
+    ax.set_title((titulo or "Árvore de decisão") +
+                 "\n[contagens por classe: " + " / ".join(nomes_classes) + "]", fontsize=11, fontweight="bold")
+    ax.set_xlim(-0.7, n_colunas - 0.3)
+    ax.set_ylim(-n_niveis - 0.7, 0.7)
+    ax.axis("off")
+    fig.tight_layout()
+    pasta = os.path.dirname(caminho)
+    if pasta:
+        os.makedirs(pasta, exist_ok=True)
+    fig.savefig(caminho, bbox_inches="tight")
+    plt.close(fig)
+    return caminho
+
+
 # 5. Métrica simples e curva de profundidade
 def f1_macro(y_real, y_pred, n_classes=3):
     y_real = np.asarray(y_real, dtype=int)
@@ -360,6 +445,11 @@ def experimento_e5(X_trval, y_trval, X_te, y_te, nomes_atributos, prof, f1_cv, c
     print("\n[E5 - Árvore: avaliação no teste]")
     arv = ArvoreDecisao("gini", prof, 5).fit(X_trval, y_trval)
     y_pred = arv.predict(X_te)
+
+    caminho_arvore = os.path.join(PASTA_FIGURAS, f"arvore_desenho_cenario_{cenario}.png")
+    plotar_arvore(arv.raiz, list(nomes_atributos), ROTULOS, caminho_arvore, prof_exibida=3,
+                  titulo=f"Árvore final - Cenário {cenario} (3 primeiros níveis; valores na escala min-max)")
+    print(f"  Desenho da árvore salvo em {caminho_arvore}")
     M = matriz_confusao(np.asarray(y_te, dtype=int), y_pred, n_classes=3)
     metr = relatorio_metricas(M)
     print(f"  Acurácia: {metr['acuracia']*100:.2f}% | F1 macro: {metr['f1_macro']:.4f} "
@@ -442,6 +532,13 @@ def rodar_testes():
     assert contar_nos(arv.raiz) == 5
     assert list(arv.predict(np.array([[1, 9], [0, 11], [0, 15]], dtype=float))) == [1, 0, 1]
     print("Teste 2 (exemplo dos 8 alunos): OK")
+
+    # desenho da árvore dos 8 alunos
+    caminho = plotar_arvore(arv.raiz, ["Bolsista", "Nota"], ["Dropout", "Graduate"],
+                            os.path.join(PASTA_FIGURAS, "arvore_exemplo_8_alunos.png"),
+                            prof_exibida=5, titulo="Árvore do exemplo dos 8 alunos")
+    assert os.path.exists(caminho) and os.path.getsize(caminho) > 0
+    print(f"Teste 2b (desenho da árvore): OK -> {caminho}")
 
     # sobreajuste e prof_max = 0
     rng = np.random.default_rng(0)
