@@ -1,0 +1,9 @@
+regra,cobertura,confianca
+SE Curricular units 1st sem (aproved) treated > 0.7333 E Curricular units 1st sem (aproved) treated > 0.8452 E Tuition fees up to date > 0.5 ENTÃO Graduate,0.4797965526985024,0.8133097762073027
+SE Curricular units 1st sem (aproved) treated <= 0.7333 E Tuition fees up to date > 0.5 E Curricular units 1st sem (aproved) treated <= 0.3429 ENTÃO Dropout,0.15032495055100312,0.7199248120300752
+SE Curricular units 1st sem (aproved) treated <= 0.7333 E Tuition fees up to date > 0.5 E Curricular units 1st sem (aproved) treated > 0.3429 ENTÃO Enrolled,0.13252331166996326,0.4072494669509595
+SE Curricular units 1st sem (aproved) treated > 0.7333 E Curricular units 1st sem (aproved) treated <= 0.8452 E Tuition fees up to date > 0.5 ENTÃO Graduate,0.11896015823679006,0.49406175771971494
+SE Curricular units 1st sem (aproved) treated <= 0.7333 E Tuition fees up to date <= 0.5 E Age at enrollment > 0.08824 ENTÃO Dropout,0.08250918338513705,0.9691780821917808
+SE Curricular units 1st sem (aproved) treated > 0.7333 E Curricular units 1st sem (aproved) treated > 0.8452 E Tuition fees up to date <= 0.5 ENTÃO Dropout,0.01610624470189319,0.49122807017543857
+SE Curricular units 1st sem (aproved) treated > 0.7333 E Curricular units 1st sem (aproved) treated <= 0.8452 E Tuition fees up to date <= 0.5 ENTÃO Dropout,0.012150324950551003,0.7209302325581395
+SE Curricular units 1st sem (aproved) treated <= 0.7333 E Tuition fees up to date <= 0.5 E Age at enrollment <= 0.08824 ENTÃO Dropout,0.007629273806159932,0.8148148148148148

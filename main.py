@@ -9,6 +9,7 @@ import time
 from trat import carregar_dados, limpar_dados, construir_atributos, codificar, mapa_de_tipos
 from meupca import gerar_graficos_pca
 from meuknn import executar_pipeline_completo
+from minhaarvore import rodar_cenario as rodar_arvore
 
 
 def main():
@@ -35,6 +36,11 @@ def main():
     print("\n>>> ETAPA 3: Experimentos do Classificador k-NN")
     for cenario in ["A", "B", "C"]:
         executar_pipeline_completo(cenario=cenario)
+
+    # 4. Arvore de Decisao (Unidade 3 e Experimentos E1, E4 e E5)
+    print("\n>>> ETAPA 4: Experimentos da Arvore de Decisao")
+    for cenario in ["A", "B", "C"]:
+        rodar_arvore(cenario)
 
     tempo_total = time.perf_counter() - inicio_total
     print("\n" + "=" * 80)
